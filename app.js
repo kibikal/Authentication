@@ -3,7 +3,8 @@ require("dotenv").config();
 const express = require("express");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-const encrypt = require("mongoose-encryption");
+const bcrypt = require("bcrypt");
+const hashRounds = 10;
 const app = express();
 
 app.use(express.urlencoded({ extended: true }));
@@ -25,8 +26,6 @@ const userSchema = new mongoose.Schema({
   password: String,
 });
 
-userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ["password"] });
-
 const userTemplateCopy = mongoose.model("User", userSchema);
 
 app.get("/", (req, res) => {
@@ -42,13 +41,15 @@ app.get("/login", (req, res) => {
 });
 
 app.post("/register", (req, res) => {
-  const newUser = new userTemplateCopy({
-    email: req.body.username,
-    password: req.body.password,
-  });
+  bcrypt.hash(req.body.password, hashRounds, (err, hash) => {
+    const newUser = new userTemplateCopy({
+      email: req.body.username,
+      password: hash,
+    });
 
-  newUser.save((err) => {
-    err ? console.log(err) : res.render("secrets");
+    newUser.save((err) => {
+      err ? console.log(err) : res.render("secrets");
+    });
   });
 });
 
@@ -60,9 +61,13 @@ app.post("/login", (req, res) => {
     if (err) {
       console.log(err);
     } else {
-      foundUser.password === password
-        ? res.render("secrets")
-        : res.send("Incorrect password, please try again!");
+      bcrypt.compare(password, foundUser.password, (err, result)=>{
+        if(result === true){
+            res.render("secrets")
+        }else{
+            res.send("Incorrect password, Please check and try again")
+        }
+      })
     }
   });
 });
